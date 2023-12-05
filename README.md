@@ -1,18 +1,24 @@
 
 # qPDF Decode
 
-Shell scripts for easier decrypting PDF files with a password using
-[QPDF](https://qpdf.sourceforge.io/).
+[<img align="right" width="96" alt="Application icon depicting a white unlocked padlock on a red sheet of paper"
+title="Link to qPDF Decode main repo"
+src="img/qpdf-decode-gui.svg">](https://git.disroot.org/daltux/qpdf-decode)
+
+Permanent decryption of a single PDF file using a password.
+
+Main repository: <https://git.disroot.org/daltux/qpdf-decode>
 
 ## Dependencies
 
-- **[QPDF](https://qpdf.sourceforge.io/)** (tested on version 11.6.3)
+- **[QPDF](https://qpdf.sourceforge.io/)** tool
+	- versions tested: 11.6.3, 8.0.2
 - A POSIX-compliant Shell (`/bin/sh`)
 	- tested on [Debian GNU/Linux](https://debian.org) and Ubuntu with:
 		- [`dash`](https://manpages.debian.org/testing/dash/dash.1.en.html) 0.5.12, 0.5.8
-		- [`posh`](https://manpages.debian.org/testing/posh/posh.1.en.html) 0.14.1
+		- [`posh`](https://manpages.debian.org/testing/posh/posh.1.en.html) 0.14.1, 0.13.1
 		- [`busybox sh`](http://www.busybox.net) 1.36.1
-- For the graphic user interface:
+- For the graphic user interface (`qpdf-decode-gui`):
 	- [YAD](https://github.com/v1cont/yad)
 		- tested on 0.40.0 from Debian, Xfce 4.18, GTK+ 3.24.38
 		- tested on 0.38.2 from Ubuntu 18.04
