@@ -1,0 +1,189 @@
+#!/bin/sh
+
+# qpdf-decode-gui: a script using yad as graphic user interface for calling
+# qpdf with a password to decrypt a pdf. If the operation succeeds, the output
+# will be a default new file adding a suffix "_decrypted" to the source file
+# name. Be careful: if the output file already exists, it will be overwritten
+# without warning!
+#
+# Copyright © 2023 Daltux <https://daltux.net/>
+#
+# This program is Free Software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# Dependencies:
+#	0: qpdf-decode in $PATH or the same directory of this file
+#	1: qpdf
+#	2: yad
+
+app_title='qPDF Decode'
+app_version='0.2.0'
+app_icon='application-pdf'
+qpdfd_name='qpdf-decode'
+qpdfd="$qpdfd_name"
+
+if [ -n "$1" ] && ([ "$1" = '-h' ] || [ "${@#*"--help"}" != "$@" ]) ; then
+	echo "$app_title (GUI) $app_version"
+	echo
+	echo "Copyright (C) 2023 Daltux <https://daltux.net>"
+	echo "This program comes with ABSOLUTELY NO WARRANTY;"
+	echo "This is Free Software, and you are welcome to redistribute it under certain conditions. For details, see the GNU General Public License, version 3 or later."
+	echo
+	echo "Usage:"
+	echo "	$0 [optional: file to decode]"
+	exit
+fi
+
+cmdExists() {
+	command -v "$1" > /dev/null 2>&1
+	return $?
+}
+
+yadExists() {
+	if [ -z $yadExists ] ; then
+		cmdExists yad
+		yadExists=$?
+	fi
+	return $yadExists
+}
+
+myad() {
+	yad --center --borders=10 --image-on-top --buttons-layout=edge \
+		--title="$app_title" --window-icon="$app_icon" "$@"
+}
+
+errorDlg() {
+	local errorMsg="$@"
+	echo "$app_title ERROR: $errorMsg" >&2
+
+	if yadExists ; then
+		myad --close-on-unfocus \
+			--image="dialog-error" \
+			--escape-ok \
+			--text="$errorMsg" \
+			--button=gtk-close:30 \
+			--timeout=10 \
+			--timeoutindicator=top
+	elif cmdExists notify-send ; then
+		notify-send --icon=error "$app_title ERROR" "$errorMsg"
+	fi
+}
+
+if ! cmdExists "$qpdfd" ; then
+	qpdfd_path=$(realpath "$0")
+	qpdfd=$(dirname "$qpdf_path")/"$qpdfd"
+fi
+
+if ! [ -x "$qpdfd" ] ; then
+	errorDlg "Cannot find or run:\n<b>$qpdfd</b>"
+	exit 30
+fi
+
+if ! yadExists ; then
+	errorDlg "Cannot find or run:\n<b>yad</b>"
+	exit 31
+fi
+
+if [ -n "$1" ] ; then
+	infile=$1
+else
+	infile=$(myad --title="$app_title" \
+		--window-icon="$app_icon" \
+		--text="Select the <b>source</b> PDF file:" \
+		--file --on-top)
+fi
+
+if [ -z "$infile" ] ; then
+	errorDlg "No input file provided."
+	exit 50
+elif ! [ -e "$infile" ] ; then
+	errorDlg "Input file not found:\n\n<tt>$infile</tt>"
+	exit 51
+fi
+
+if cmdExists mimetype ; then
+	mimecmd='mimetype'
+	mimecmd_opts='-b'
+elif cmdExists file ; then
+	mimecmd='file'
+	mimecmd_opts='-ib'
+elif cmdExists xdg-mime ; then
+	mimecmd='xdg-mime'
+	mimecmd_opts='query filetype'
+fi
+
+pdfmime='application/pdf'
+xpdfmime='application/x-pdf'
+
+if [ -n "$mimecmd" ] && ! "$mimecmd" "$mimecmd_opts" "$infile" | grep -Fqs -e "$pdfmime" -e "$xpdfmime" ; then
+	errorDlg "Media Type different than\n\"<tt>$pdfmime</tt>\" or \"<tt>$xpdfmime</tt>\":\n\n<tt>$infile</tt>"
+	exit 52
+fi
+
+inpath=$(dirname "$infile")
+outfile=$(myad \
+	--text="Select the <b>output</b> PDF file:" \
+	--on-top --file --save --add-preview --mime-filter="$pdfmime" --mime-filter="$xpdfmime" \
+	--confirm-overwrite="Output file already exists. Do you want to overwrite it?")
+
+pass=$(myad \
+	--image="dialog-password" \
+	--text="Enter passphrase for file\n<tt><b>$infile</b></tt>:" \
+	--entry --hide-text --entry-label="Passphrase")
+
+if [ -z $pass ] ; then
+	errorDlg "Missing passphrase for decryption."
+	exit 40
+fi
+
+#myad --form \
+#	--text "Password for decrypting $infile" \
+#	--image Frutas.jpg \
+#	--field "Escolha uma fruta:CB" 'Pera!Uva!Maçã!Manga' \
+#	--field Outra "" \
+#	--field "Qtas vc come?:NUM" '1!1..10!1' \
+#	--field "Arquivo:FL" \
+#	--field "Como e chupo o caroço:CHK"
+
+#outfile=${infile}_decrypted
+#outfile=${3:-$outfile}
+
+qpdfd_output=$( "$qpdfd" "$pass" "$infile" "$outfile" 2>&1 )
+qpdfd_exit=$?
+
+case $qpdfd_exit in
+	0)
+		[ -n "$qpdfd_output" ] && echo "$qpdfd_output"
+		myad --text="Operation succeeded.\n\n<tt>$qpdfd_output</tt>" \
+			--button="gtk-ok:0" \
+			--image="dialog-information"
+		;;
+	1)
+		errorDlg "Unable to run qpdf."
+		;;
+	2|3)
+		errorDlg "QPDF error or warning:\n\n<tt>$qpdfd_output</tt>"
+		;;
+	4)
+		errorDlg "Missing passphrase for decryption."
+		;;
+	5)
+		errorDlg "Missing reference to source PDF file."
+		;;
+	*)
+		errorDlg "Unspecified output:\n\n<tt>$qpdfd_output</tt>"
+		;;
+esac
+
+exit $qpdfd_exit
+
